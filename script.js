@@ -10,16 +10,25 @@ let PLAYERS = [];
 let matches = [];
 let playerStats = {};
 let gameCount = 10;
+let isInitialLoad = true;
 
-// PeerJS setup
-let peer = null;
-let isHost = false;
-let connections = [];
-let hostConnection = null;
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBYsLwMaBVYzRJ6bbhCZEfFkoa_ZL6kW1o",
+  authDomain: "gen-lang-client-0710460574.firebaseapp.com",
+  databaseURL: "https://gen-lang-client-0710460574-default-rtdb.firebaseio.com",
+  projectId: "gen-lang-client-0710460574",
+  storageBucket: "gen-lang-client-0710460574.firebasestorage.app",
+  messagingSenderId: "307681667237",
+  appId: "1:307681667237:web:90996b0e00b7edbedfc54c",
+  measurementId: "G-RDREMNFL3Q"
+};
+
+let dbRef = null;
 
 function init() {
     loadFromLocalStorage();
-    initPeerJS();
+    initFirebase();
     renderPlayersInput();
     if(matches.length === 0) {
         generateMatches(gameCount, false); 
@@ -31,142 +40,51 @@ function init() {
     switchTab('matches');
 }
 
-const ROOM_ID = "pingpong-super-league-room-v1"; // 고정된 방 ID
-
-function updateStatus(text, color) {
-    const el = document.getElementById('connection-status');
-    if (el) {
-        el.innerText = text;
-        el.style.color = color;
+function initFirebase() {
+    updateStatus('🟡 서버 연결 중...', 'var(--text-secondary)');
+    
+    // Firebase 초기화
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
     }
-}
+    const db = firebase.database();
+    dbRef = db.ref('pingpong_rooms/main_room');
 
-const peerOptions = {
-    config: {
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun.services.mozilla.com' }
-        ]
-    }
-};
-
-function initPeerJS() {
-    updateStatus('🟡 접속 중...', 'var(--text-secondary)');
-    // 1. 고정된 방 ID로 호스트(방장) 선점을 시도합니다.
-    peer = new Peer(ROOM_ID, peerOptions);
-
-    peer.on('open', (id) => {
-        // 선점에 성공했다면 이 기기(PC)가 메인 호스트입니다.
-        isHost = true;
-        console.log('👑 P2P 호스트 생성 완료 (방장):', id);
-        updateStatus('👑 메인(방장)', 'var(--accent-green)');
-        
-        peer.on('connection', (conn) => {
-            connections.push(conn);
-            conn.on('open', () => {
-                console.log('새 접속자(스마트폰) 연결됨:', conn.peer);
-                // 접속한 폰에게 현재 PC의 전체 상태를 즉시 전송하여 덮어씌웁니다.
-                conn.send({
-                    type: 'INIT_STATE',
-                    data: { players: PLAYERS, matches: matches, gameCount: gameCount }
-                });
-            });
-
-            conn.on('data', (data) => {
-                handlePeerData(data);
-                // 한 폰에서 온 데이터를 다른 모든 폰에도 뿌려줌
-                connections.forEach(c => {
-                    if (c.peer !== conn.peer && c.open) {
-                        c.send(data);
-                    }
-                });
-            });
+    dbRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            PLAYERS = data.players || [];
+            matches = data.matches || [];
+            gameCount = data.gameCount || 10;
             
-            conn.on('close', () => {
-                connections = connections.filter(c => c.peer !== conn.peer);
-            });
-        });
-    });
-
-    peer.on('error', (err) => {
-        if (err.type === 'unavailable-id') {
-            // 이미 누군가(PC)가 방장이 되어있으므로, 이 기기(폰)는 클라이언트로 접속합니다.
-            console.log('📱 호스트가 이미 존재합니다. 클라이언트로 접속 시도...');
-            isHost = false;
-            updateStatus('🟡 방장 찾는중...', 'var(--text-secondary)');
-            
-            // 일반 클라이언트는 랜덤 ID로 생성
-            peer = new Peer(undefined, peerOptions);
-            peer.on('open', (id) => {
-                hostConnection = peer.connect(ROOM_ID);
-                
-                hostConnection.on('open', () => {
-                    console.log('✅ 방장(PC)과 실시간 연결 성공!');
-                    updateStatus('📱 연결됨', 'var(--accent-blue)');
-                });
-                
-                hostConnection.on('data', handlePeerData);
-                hostConnection.on('close', () => {
-                    console.log('❌ 방장과 연결 끊어짐');
-                    updateStatus('❌ 끊어짐', 'var(--accent-red)');
-                });
-            });
-        } else {
-            console.error('PeerJS 에러:', err);
-            updateStatus('❌ 접속 에러', 'var(--accent-red)');
-        }
-    });
-}
-
-function handlePeerData(msg) {
-    if (msg.type === 'INIT_STATE' || msg.type === 'FULL_STATE_UPDATE') {
-        PLAYERS = msg.data.players;
-        matches = msg.data.matches;
-        gameCount = msg.data.gameCount;
-        saveToLocalStorage();
-        calculateStats();
-        renderDashboard();
-        renderMatches();
-        renderPlayersInput();
-    } else if (msg.type === 'UPDATE_SET') {
-        const match = matches.find(m => m.id === msg.matchId);
-        if(match) {
-            match.setResults[msg.setIndex] = msg.teamWin;
-            match.winner = msg.winner;
             saveToLocalStorage();
             calculateStats();
             renderDashboard();
             renderMatches();
+            renderPlayersInput();
+            
+            if (isInitialLoad) {
+                updateStatus('🟢 실시간 동기화 완료', 'var(--accent-green)');
+                isInitialLoad = false;
+            }
+        } else {
+            // DB가 비어있는 최초 상태일 경우 현재 로컬 데이터를 업로드
+            if (isInitialLoad) {
+                saveToFirebase();
+                updateStatus('🟢 실시간 동기화 완료', 'var(--accent-green)');
+                isInitialLoad = false;
+            }
         }
-    }
+    });
 }
 
-function broadcastFullState() {
-    const data = {
-        type: 'FULL_STATE_UPDATE',
-        data: { players: PLAYERS, matches: matches, gameCount: gameCount }
-    };
-    if (isHost) {
-        connections.forEach(c => { if(c.open) c.send(data); });
-    } else if (hostConnection && hostConnection.open) {
-        hostConnection.send(data);
-    }
-}
-
-function broadcastUpdateSet(matchId, setIndex, teamWin, winner) {
-    const data = {
-        type: 'UPDATE_SET',
-        matchId: matchId,
-        setIndex: setIndex,
-        teamWin: teamWin,
-        winner: winner
-    };
-    if (isHost) {
-        connections.forEach(c => { if(c.open) c.send(data); });
-    } else if (hostConnection && hostConnection.open) {
-        hostConnection.send(data);
+function saveToFirebase() {
+    if (dbRef) {
+        dbRef.set({
+            players: PLAYERS,
+            matches: matches,
+            gameCount: gameCount
+        });
     }
 }
 
@@ -359,7 +277,7 @@ window.loadMoreMatches = function() {
     calculateStats();
     renderDashboard();
     renderMatches();
-    broadcastFullState();
+    saveToFirebase();
 }
 
 function generateMatches(totalGames, shouldBroadcast) {
@@ -407,7 +325,7 @@ function generateMatches(totalGames, shouldBroadcast) {
     renderMatches();
 
     if(shouldBroadcast) {
-        broadcastFullState();
+        saveToFirebase();
     }
 }
 
@@ -523,8 +441,8 @@ window.handleSetClick = function(matchId, setIndex, teamWin) {
     renderDashboard();
     renderMatches(); 
     
-    // 서버 전송 (Delta)
-    broadcastUpdateSet(matchId, setIndex, match.setResults[setIndex], match.winner);
+    // 서버 전송 (전체 데이터 덮어쓰기)
+    saveToFirebase();
 }
 
 function renderMatches() {
