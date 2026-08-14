@@ -41,10 +41,21 @@ function updateStatus(text, color) {
     }
 }
 
+const peerOptions = {
+    config: {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun.services.mozilla.com' }
+        ]
+    }
+};
+
 function initPeerJS() {
     updateStatus('🟡 접속 중...', 'var(--text-secondary)');
     // 1. 고정된 방 ID로 호스트(방장) 선점을 시도합니다.
-    peer = new Peer(ROOM_ID);
+    peer = new Peer(ROOM_ID, peerOptions);
 
     peer.on('open', (id) => {
         // 선점에 성공했다면 이 기기(PC)가 메인 호스트입니다.
@@ -87,7 +98,7 @@ function initPeerJS() {
             updateStatus('🟡 방장 찾는중...', 'var(--text-secondary)');
             
             // 일반 클라이언트는 랜덤 ID로 생성
-            peer = new Peer();
+            peer = new Peer(undefined, peerOptions);
             peer.on('open', (id) => {
                 hostConnection = peer.connect(ROOM_ID);
                 
