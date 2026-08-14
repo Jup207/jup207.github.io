@@ -33,7 +33,16 @@ function init() {
 
 const ROOM_ID = "pingpong-super-league-room-v1"; // 고정된 방 ID
 
+function updateStatus(text, color) {
+    const el = document.getElementById('connection-status');
+    if (el) {
+        el.innerText = text;
+        el.style.color = color;
+    }
+}
+
 function initPeerJS() {
+    updateStatus('🟡 접속 중...', 'var(--text-secondary)');
     // 1. 고정된 방 ID로 호스트(방장) 선점을 시도합니다.
     peer = new Peer(ROOM_ID);
 
@@ -41,6 +50,7 @@ function initPeerJS() {
         // 선점에 성공했다면 이 기기(PC)가 메인 호스트입니다.
         isHost = true;
         console.log('👑 P2P 호스트 생성 완료 (방장):', id);
+        updateStatus('👑 메인(방장)', 'var(--accent-green)');
         
         peer.on('connection', (conn) => {
             connections.push(conn);
@@ -74,6 +84,7 @@ function initPeerJS() {
             // 이미 누군가(PC)가 방장이 되어있으므로, 이 기기(폰)는 클라이언트로 접속합니다.
             console.log('📱 호스트가 이미 존재합니다. 클라이언트로 접속 시도...');
             isHost = false;
+            updateStatus('🟡 방장 찾는중...', 'var(--text-secondary)');
             
             // 일반 클라이언트는 랜덤 ID로 생성
             peer = new Peer();
@@ -82,13 +93,18 @@ function initPeerJS() {
                 
                 hostConnection.on('open', () => {
                     console.log('✅ 방장(PC)과 실시간 연결 성공!');
+                    updateStatus('📱 연결됨', 'var(--accent-blue)');
                 });
                 
                 hostConnection.on('data', handlePeerData);
-                hostConnection.on('close', () => console.log('❌ 방장과 연결 끊어짐'));
+                hostConnection.on('close', () => {
+                    console.log('❌ 방장과 연결 끊어짐');
+                    updateStatus('❌ 끊어짐', 'var(--accent-red)');
+                });
             });
         } else {
             console.error('PeerJS 에러:', err);
+            updateStatus('❌ 접속 에러', 'var(--accent-red)');
         }
     });
 }
