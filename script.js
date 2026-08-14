@@ -31,35 +31,22 @@ function init() {
     switchTab('matches');
 }
 
-function initPeerJS() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const hostId = urlParams.get('host');
+const ROOM_ID = "pingpong-super-league-room-v1"; // 고정된 방 ID
 
-    peer = new Peer(); // 랜덤 ID 자동 할당
+function initPeerJS() {
+    // 1. 고정된 방 ID로 호스트(방장) 선점을 시도합니다.
+    peer = new Peer(ROOM_ID);
 
     peer.on('open', (id) => {
-        if (!hostId) {
-            isHost = true;
-            console.log('👑 P2P 호스트 생성 완료:', id);
-            generateQRCode(id);
-        } else {
-            isHost = false;
-            console.log('📱 호스트 연결 시도 중... ID:', hostId);
-            hostConnection = peer.connect(hostId);
-            
-            hostConnection.on('open', () => {
-                console.log('✅ 호스트와 실시간 연결 성공!');
-            });
-            hostConnection.on('data', handlePeerData);
-            hostConnection.on('close', () => console.log('❌ 호스트와 연결 끊어짐'));
-        }
-    });
-
-    peer.on('connection', (conn) => {
-        if (isHost) {
+        // 선점에 성공했다면 이 기기(PC)가 메인 호스트입니다.
+        isHost = true;
+        console.log('👑 P2P 호스트 생성 완료 (방장):', id);
+        
+        peer.on('connection', (conn) => {
             connections.push(conn);
             conn.on('open', () => {
-                console.log('새 접속자:', conn.peer);
+                console.log('새 접속자(스마트폰) 연결됨:', conn.peer);
+                // 접속한 폰에게 현재 PC의 전체 상태를 즉시 전송하여 덮어씌웁니다.
                 conn.send({
                     type: 'INIT_STATE',
                     data: { players: PLAYERS, matches: matches, gameCount: gameCount }
@@ -68,7 +55,7 @@ function initPeerJS() {
 
             conn.on('data', (data) => {
                 handlePeerData(data);
-                // 클라이언트에게서 온 데이터를 다른 모든 클라이언트에게도 전파
+                // 한 폰에서 온 데이터를 다른 모든 폰에도 뿌려줌
                 connections.forEach(c => {
                     if (c.peer !== conn.peer && c.open) {
                         c.send(data);
@@ -79,6 +66,29 @@ function initPeerJS() {
             conn.on('close', () => {
                 connections = connections.filter(c => c.peer !== conn.peer);
             });
+        });
+    });
+
+    peer.on('error', (err) => {
+        if (err.type === 'unavailable-id') {
+            // 이미 누군가(PC)가 방장이 되어있으므로, 이 기기(폰)는 클라이언트로 접속합니다.
+            console.log('📱 호스트가 이미 존재합니다. 클라이언트로 접속 시도...');
+            isHost = false;
+            
+            // 일반 클라이언트는 랜덤 ID로 생성
+            peer = new Peer();
+            peer.on('open', (id) => {
+                hostConnection = peer.connect(ROOM_ID);
+                
+                hostConnection.on('open', () => {
+                    console.log('✅ 방장(PC)과 실시간 연결 성공!');
+                });
+                
+                hostConnection.on('data', handlePeerData);
+                hostConnection.on('close', () => console.log('❌ 방장과 연결 끊어짐'));
+            });
+        } else {
+            console.error('PeerJS 에러:', err);
         }
     });
 }
@@ -131,25 +141,6 @@ function broadcastUpdateSet(matchId, setIndex, teamWin, winner) {
     } else if (hostConnection && hostConnection.open) {
         hostConnection.send(data);
     }
-}
-
-function generateQRCode(hostId) {
-    if (typeof QRCode === 'undefined' || !hostId) return;
-    
-    let baseUrl = window.location.href.split('?')[0]; 
-    let qrUrl = baseUrl + '?host=' + hostId;
-
-    const qrContainer = document.getElementById('qrcode-container');
-    qrContainer.innerHTML = '';
-    qrContainer.style.display = 'block';
-    new QRCode(qrContainer, {
-        text: qrUrl,
-        width: 80,
-        height: 80,
-        colorDark : "#0f172a",
-        colorLight : "#ffffff",
-        correctLevel : QRCode.CorrectLevel.L
-    });
 }
 
 function saveToLocalStorage() {
@@ -420,6 +411,12 @@ function renderDashboard() {
     // 총 완료된 경기 수 확인 (순위 표시 여부)
     const completedMatches = matches.filter(m => m.winner !== 0).length;
     const showRank = completedMatches > 0;
+    
+    // 헤더에 완료된 경기수 업데이트
+    const completedGamesEl = document.getElementById('completed-games-count');
+    if (completedGamesEl) {
+        completedGamesEl.innerText = `완료된 게임: ${completedMatches} / ${gameCount}게임`;
+    }
 
     // 정렬: 1순위 승수(내림차순), 2순위 부수(오름차순-디폴트 잘치는사람)
     const sortedStats = Object.values(playerStats).sort((a, b) => {
@@ -447,21 +444,20 @@ function renderDashboard() {
         
         let rankHtml = '';
         if (showRank) {
-            rankHtml = `<div class="player-rank" style="font-weight:900; color:var(--text-secondary); width:15px; margin-right:5px;">${currentRank}</div>`;
+            rankHtml = `<div class="player-rank" style="font-weight:900; color:var(--text-secondary); margin-right:8px;">${currentRank}.</div>`;
         }
 
+        // 한줄로 렌더링
         card.innerHTML = `
             ${rankHtml}
-            <div>
-                <div class="player-name">${stat.name} <span class="player-bu">${stat.bu}부</span></div>
+            <div style="display:flex; flex-direction:row; gap:0.5rem; align-items:center;">
+                <div class="player-name">${stat.name}</div>
+                <div class="player-bu">${stat.bu}부</div>
                 <div class="player-record">${stat.wins}승 <span class="player-rate">(${rate}%)</span></div>
             </div>
         `;
         container.appendChild(card);
     });
-    
-    // QR코드가 아직 없으면 생성 시도 (P2P는 open될때 하므로 제거)
-    // generateQRCode();
 }
 
 window.handleSetClick = function(matchId, setIndex, teamWin) {

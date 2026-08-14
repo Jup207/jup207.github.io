@@ -103,13 +103,6 @@ h1 {
     background: rgba(239, 68, 68, 0.1);
 }
 
-#qrcode-container {
-    background: white;
-    padding: 4px;
-    border-radius: 6px;
-    display: none; /* Shows only if QR generated */
-}
-
 /* Compact Player Stats */
 .player-stats-container {
     display: flex;
@@ -330,8 +323,6 @@ h1 {
     filter: grayscale(100%);
 }
 
-/* Settings Form */
-
 .settings-card {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
@@ -466,14 +457,28 @@ h1 {
     }
     .teams-container {
         width: 100%;
-        flex-direction: column;
-        gap: 0.5rem;
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 0.2rem;
     }
     .vs {
-        display: none; /* 모바일에서는 VS 텍스트를 숨겨 깔끔하게 처리 */
+        display: block; 
+        font-size: 0.7rem;
     }
     .team {
-        width: 100%;
+        width: auto;
+        flex: 1;
+        padding: 0.4rem 0.2rem;
+        min-width: 0;
+    }
+    .team-name {
+        font-size: 0.75rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .team-bu-sum {
+        font-size: 0.6rem;
     }
     .header-top {
         flex-direction: column;
