@@ -408,7 +408,11 @@ function renderDashboard() {
             <div class="player-stat-card">
                 <div class="player-name">${stat.name}</div>
                 <div class="player-bu">${stat.bu}부</div>
-                <div class="player-record">${stat.wins}승 <span class="player-rate">(${rate}%)</span></div>
+                <div class="player-record">
+                    <div>${stat.wins}승</div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: normal;">/${stat.matchesPlayed}전</div> 
+                    <div class="player-rate">(${rate}%)</div>
+                </div>
             </div>
         `;
         container.appendChild(wrapper);
@@ -476,7 +480,7 @@ function renderMatches() {
         card.innerHTML = `
             <div class="match-header">
                 <span class="match-number">Game ${match.id}</span>
-                ${match.referee ? `<span class="match-referee">👑 심판: ${match.referee.name}</span>` : `<span class="match-referee">심판 없음</span>`}
+                ${match.referee ? `<span class="match-referee" onclick="openSwapModal(${match.id})" title="심판 교체하기">👑 심판: ${match.referee.name} 🔄</span>` : `<span class="match-referee">심판 없음</span>`}
             </div>
             
             <div class="match-body">
@@ -495,15 +499,22 @@ function renderMatches() {
                 </div>
 
                 <div class="sets-container">
+                    <div class="result-label-box">
+                        <span class="set-title" style="visibility:hidden">결과</span>
+                        <div class="result-label ${match.winner === 1 ? 'win' : (match.winner === 2 ? 'loss' : '')}">${match.winner === 1 ? '승' : (match.winner === 2 ? '패' : '승/패')}</div>
+                        <div class="result-label ${match.winner === 2 ? 'win' : (match.winner === 1 ? 'loss' : '')}">${match.winner === 2 ? '승' : (match.winner === 1 ? '패' : '승/패')}</div>
+                    </div>
                     ${[0, 1, 2].map(setIdx => {
                         const isDisabled = (setIdx === 2 && is3rdSetDisabled);
+                        const t1Win = match.setResults[setIdx] === 1;
+                        const t2Win = match.setResults[setIdx] === 2;
                         return `
                         <div class="set-box ${isDisabled ? 'disabled-set' : ''}">
                             <span class="set-title">${setIdx + 1}세트</span>
-                            <button class="set-btn team1-btn ${match.setResults[setIdx] === 1 ? 'active' : ''} ${isDisabled ? 'disabled' : ''}" 
+                            <button class="set-btn team1-btn ${t1Win ? 'active' : ''} ${t2Win ? 'loser' : ''} ${isDisabled ? 'disabled' : ''}" 
                                 ${isDisabled ? 'disabled' : ''}
                                 onclick="handleSetClick(${match.id}, ${setIdx}, 1)">팀1</button>
-                            <button class="set-btn team2-btn ${match.setResults[setIdx] === 2 ? 'active' : ''} ${isDisabled ? 'disabled' : ''}" 
+                            <button class="set-btn team2-btn ${t2Win ? 'active' : ''} ${t1Win ? 'loser' : ''} ${isDisabled ? 'disabled' : ''}" 
                                 ${isDisabled ? 'disabled' : ''}
                                 onclick="handleSetClick(${match.id}, ${setIdx}, 2)">팀2</button>
                         </div>
@@ -515,6 +526,73 @@ function renderMatches() {
         
         container.appendChild(card);
     });
+}
+
+let currentSwapMatchId = null;
+
+window.openSwapModal = function(matchId) {
+    const match = matches.find(m => m.id === matchId);
+    if (!match || !match.referee) return;
+    
+    // Check if results are entered
+    const hasResults = match.setResults.some(res => res !== 0);
+    if (hasResults) {
+        alert("승패가 입력된 게임은 심판을 변경할 수 없습니다.");
+        return;
+    }
+    
+    currentSwapMatchId = matchId;
+    const listContainer = document.getElementById('swap-player-list');
+    listContainer.innerHTML = '';
+    
+    // Players in this match
+    const playingPlayers = [...match.team1, ...match.team2];
+    
+    playingPlayers.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = 'modal-player-btn';
+        btn.innerText = `${p.name} (${p.bu}부)`;
+        btn.onclick = () => performSwap(p.id);
+        listContainer.appendChild(btn);
+    });
+    
+    document.getElementById('swap-modal').classList.add('active');
+}
+
+window.closeSwapModal = function() {
+    document.getElementById('swap-modal').classList.remove('active');
+    currentSwapMatchId = null;
+}
+
+window.performSwap = function(playerId) {
+    if (!currentSwapMatchId) return;
+    const match = matches.find(m => m.id === currentSwapMatchId);
+    if (!match) return;
+    
+    const oldReferee = match.referee;
+    let targetPlayer = null;
+    
+    const t1Idx = match.team1.findIndex(p => p.id === playerId);
+    if (t1Idx !== -1) {
+        targetPlayer = match.team1[t1Idx];
+        match.team1[t1Idx] = oldReferee;
+    } else {
+        const t2Idx = match.team2.findIndex(p => p.id === playerId);
+        if (t2Idx !== -1) {
+            targetPlayer = match.team2[t2Idx];
+            match.team2[t2Idx] = oldReferee;
+        }
+    }
+    
+    if (targetPlayer) {
+        match.referee = targetPlayer;
+        saveToLocalStorage();
+        calculateStats();
+        renderDashboard();
+        renderMatches();
+        saveToFirebase();
+    }
+    closeSwapModal();
 }
 
 document.addEventListener('DOMContentLoaded', init);
