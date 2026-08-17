@@ -4,19 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>탁구 복식 매치 대시보드</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app-container">
         <header class="dashboard-header" id="dashboard-header">
             <div class="header-top">
-                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                <div style="display:flex; flex-direction:column; gap:0.3rem;">
                     <h1>🏓 핑퐁 복식 슈퍼리그</h1>
-                    <div id="completed-games-count" style="font-size:0.8rem; color:var(--accent-blue); font-weight:bold;">완료된 게임: 0 / 10게임</div>
+                    <div style="display:flex; align-items:center; gap:0.8rem;">
+                        <div id="completed-games-count" style="font-size:0.8rem; color:var(--accent-blue); font-weight:bold;">완료된 게임: 0 / 10게임</div>
+                        <div id="connection-status" style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold;">🟡 접속 중...</div>
+                    </div>
                 </div>
                 <div class="header-right">
-                    <div id="connection-status" style="font-size:0.75rem; color:var(--text-secondary); margin-right:10px; font-weight:bold;">🟡 접속 중...</div>
                     <div class="tabs">
                         <button class="tab-btn active" id="tab-matches" onclick="switchTab('matches')">매치</button>
                         <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">설정</button>
