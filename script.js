@@ -70,13 +70,13 @@ function initFirebase() {
             renderPlayersInput();
             
             if (isInitialLoad) {
-                updateStatus('🟢 실시간 동기화 완료', 'var(--accent-green)');
+                updateStatus('🟢 실시간 동기화', 'var(--accent-green)');
                 isInitialLoad = false;
             }
         } else {
             if (isInitialLoad) {
                 saveToFirebase();
-                updateStatus('🟢 실시간 동기화 완료', 'var(--accent-green)');
+                updateStatus('🟢 실시간 동기화', 'var(--accent-green)');
                 isInitialLoad = false;
             }
         }
