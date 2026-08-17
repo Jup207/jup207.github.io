@@ -10,82 +10,18 @@ let PLAYERS = [];
 let matches = [];
 let playerStats = {};
 let gameCount = 10;
-let isInitialLoad = true;
-
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyBYsLwMaBVYzRJ6bbhCZEfFkoa_ZL6kW1o",
-  authDomain: "gen-lang-client-0710460574.firebaseapp.com",
-  databaseURL: "https://gen-lang-client-0710460574-default-rtdb.firebaseio.com",
-  projectId: "gen-lang-client-0710460574",
-  storageBucket: "gen-lang-client-0710460574.firebasestorage.app",
-  messagingSenderId: "307681667237",
-  appId: "1:307681667237:web:90996b0e00b7edbedfc54c",
-  measurementId: "G-RDREMNFL3Q"
-};
-
-let dbRef = null;
 
 function init() {
     loadFromLocalStorage();
-    initFirebase();
     renderPlayersInput();
     if(matches.length === 0) {
-        generateMatches(gameCount, false); 
+        generateMatches(gameCount); 
     } else {
         calculateStats();
         renderDashboard();
         renderMatches();
     }
     switchTab('matches');
-}
-
-function initFirebase() {
-    updateStatus('🟡 서버 연결 중...', 'var(--text-secondary)');
-    
-    // Firebase 초기화
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.database();
-    dbRef = db.ref('pingpong_rooms/main_room');
-
-    dbRef.on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            PLAYERS = data.players || [];
-            matches = data.matches || [];
-            gameCount = data.gameCount || 10;
-            
-            saveToLocalStorage();
-            calculateStats();
-            renderDashboard();
-            renderMatches();
-            renderPlayersInput();
-            
-            if (isInitialLoad) {
-                updateStatus('🟢 실시간 동기화 완료', 'var(--accent-green)');
-                isInitialLoad = false;
-            }
-        } else {
-            // DB가 비어있는 최초 상태일 경우 현재 로컬 데이터를 업로드
-            if (isInitialLoad) {
-                saveToFirebase();
-                updateStatus('🟢 실시간 동기화 완료', 'var(--accent-green)');
-                isInitialLoad = false;
-            }
-        }
-    });
-}
-
-function saveToFirebase() {
-    if (dbRef) {
-        dbRef.set({
-            players: PLAYERS,
-            matches: matches,
-            gameCount: gameCount
-        });
-    }
 }
 
 function saveToLocalStorage() {
@@ -110,7 +46,7 @@ window.resetAllData = function() {
     if(confirm('모든 데이터가 초기화됩니다. 계속하시겠습니까?')) {
         PLAYERS = [...DEFAULT_PLAYERS];
         gameCount = 10;
-        generateMatches(gameCount, true);
+        generateMatches(gameCount);
         switchTab('matches');
     }
 }
@@ -192,7 +128,7 @@ window.applySettingsAndGenerate = function() {
     PLAYERS = newPlayers;
     gameCount = countInput;
     
-    generateMatches(gameCount, true);
+    generateMatches(gameCount);
     switchTab('matches');
 }
 
@@ -277,10 +213,9 @@ window.loadMoreMatches = function() {
     calculateStats();
     renderDashboard();
     renderMatches();
-    saveToFirebase();
 }
 
-function generateMatches(totalGames, shouldBroadcast) {
+function generateMatches(totalGames) {
     matches = [];
     let refCounts = {};
     let playCounts = {};
@@ -324,9 +259,6 @@ function generateMatches(totalGames, shouldBroadcast) {
     renderDashboard();
     renderMatches();
 
-    if(shouldBroadcast) {
-        saveToFirebase();
-    }
 }
 
 function calculateStats() {
@@ -440,9 +372,6 @@ window.handleSetClick = function(matchId, setIndex, teamWin) {
     calculateStats();
     renderDashboard();
     renderMatches(); 
-    
-    // 서버 전송 (전체 데이터 덮어쓰기)
-    saveToFirebase();
 }
 
 function renderMatches() {
