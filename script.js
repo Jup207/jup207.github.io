@@ -15,7 +15,7 @@ let isInitialLoad = true;
 const firebaseConfig = {
   apiKey: "AIzaSyD1P1OwTu2kX7SL-m43YiLoR_VujM_mh_4",
   authDomain: "pingpong-d9710.firebaseapp.com",
-  databaseURL: "https://pingpong-d9710-default-rtdb.firebaseio.com",
+  databaseURL: "https://pingpong-d9710-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "pingpong-d9710",
   storageBucket: "pingpong-d9710.firebasestorage.app",
   messagingSenderId: "992627061278",
