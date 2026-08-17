@@ -389,24 +389,29 @@ function renderDashboard() {
         previousWins = stat.wins;
 
         const rate = stat.matchesPlayed === 0 ? 0 : Math.round((stat.wins / stat.matchesPlayed) * 100);
-        const card = document.createElement('div');
-        card.className = 'player-stat-card';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'player-stat-wrapper';
         
         let rankHtml = '';
         if (showRank) {
-            rankHtml = `<div class="player-rank" style="font-weight:900; color:var(--text-secondary); margin-right:8px;">${currentRank}.</div>`;
+            let rankClass = 'player-rank';
+            if (currentRank === 1) rankClass += ' rank-1';
+            else if (currentRank === 2) rankClass += ' rank-2';
+            else if (currentRank === 3) rankClass += ' rank-3';
+            rankHtml = `<div class="${rankClass}">${currentRank}위</div>`;
+        } else {
+            rankHtml = `<div class="player-rank" style="visibility:hidden">0위</div>`;
         }
 
-        // 한줄로 렌더링
-        card.innerHTML = `
+        wrapper.innerHTML = `
             ${rankHtml}
-            <div style="display:flex; flex-direction:row; gap:0.5rem; align-items:center;">
+            <div class="player-stat-card">
                 <div class="player-name">${stat.name}</div>
                 <div class="player-bu">${stat.bu}부</div>
                 <div class="player-record">${stat.wins}승 <span class="player-rate">(${rate}%)</span></div>
             </div>
         `;
-        container.appendChild(card);
+        container.appendChild(wrapper);
     });
 }
 
