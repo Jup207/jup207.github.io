@@ -10,6 +10,7 @@ let PLAYERS = [];
 let matches = [];
 let playerStats = {};
 let gameCount = 10;
+let maxSets = 3;
 let isInitialLoad = true;
 
 const firebaseConfig = {
@@ -60,8 +61,14 @@ function initFirebase() {
         const data = snapshot.val();
         if (data) {
             PLAYERS = data.players || [];
-            matches = data.matches || [];
-            gameCount = data.gameCount || 10;
+            if (data.matches) {
+                matches = data.matches.map(m => {
+                    if (!m.maxSets) m.maxSets = m.setResults ? m.setResults.length : 3;
+                    return m;
+                });
+            }
+            if (data.gameCount) gameCount = data.gameCount;
+            if (data.maxSets) maxSets = data.maxSets;
             
             saveToLocalStorage();
             calculateStats();
@@ -88,7 +95,9 @@ function saveToFirebase() {
         dbRef.set({
             players: PLAYERS,
             matches: matches,
-            gameCount: gameCount
+            gameCount: gameCount,
+            maxSets: maxSets,
+            timestamp: Date.now()
         });
     }
 }
@@ -96,19 +105,27 @@ function saveToFirebase() {
 function saveToLocalStorage() {
     localStorage.setItem('pingpong_players', JSON.stringify(PLAYERS));
     localStorage.setItem('pingpong_matches', JSON.stringify(matches));
-    localStorage.setItem('pingpong_gameCount', gameCount.toString());
+    localStorage.setItem('pingpong_gameCount', gameCount);
+    localStorage.setItem('pingpong_maxSets', maxSets);
 }
 
 function loadFromLocalStorage() {
     const savedPlayers = localStorage.getItem('pingpong_players');
     const savedMatches = localStorage.getItem('pingpong_matches');
     const savedCount = localStorage.getItem('pingpong_gameCount');
+    const savedMaxSets = localStorage.getItem('pingpong_maxSets');
 
     if (savedPlayers) PLAYERS = JSON.parse(savedPlayers);
     else PLAYERS = [...DEFAULT_PLAYERS];
 
-    if (savedMatches) matches = JSON.parse(savedMatches);
+    if (savedMatches) {
+        matches = JSON.parse(savedMatches).map(m => {
+            if (!m.maxSets) m.maxSets = m.setResults ? m.setResults.length : 3;
+            return m;
+        });
+    }
     if (savedCount) gameCount = parseInt(savedCount);
+    if (savedMaxSets) maxSets = parseInt(savedMaxSets);
 }
 
 window.resetAllData = function() {
@@ -160,6 +177,8 @@ function renderPlayersInput() {
         container.appendChild(row);
     });
     document.getElementById('game-count').value = gameCount;
+    const maxSetsEl = document.getElementById('max-sets');
+    if(maxSetsEl) maxSetsEl.value = maxSets;
 }
 
 window.addPlayerInput = function() {
@@ -194,11 +213,48 @@ window.applySettingsAndGenerate = function() {
     const countInput = parseInt(document.getElementById('game-count').value);
     if (isNaN(countInput) || countInput < 1) return alert('게임 수는 1 이상이어야 합니다.');
 
+    const maxSetsInput = parseInt(document.getElementById('max-sets').value);
+
     PLAYERS = newPlayers;
     gameCount = countInput;
+    if(maxSetsInput === 3 || maxSetsInput === 5) maxSets = maxSetsInput;
     
     generateMatches(gameCount, true);
     switchTab('matches');
+}
+
+window.applySettingsOnly = function() {
+    const maxSetsInput = parseInt(document.getElementById('max-sets').value);
+    if(maxSetsInput === 3 || maxSetsInput === 5) {
+        maxSets = maxSetsInput;
+        
+        matches.forEach(m => {
+            const hasStarted = m.setResults.some(r => r !== 0);
+            if (!hasStarted) {
+                m.maxSets = maxSets;
+                m.setResults = Array(maxSets).fill(0);
+                m.winner = 0;
+            }
+        });
+
+        saveToLocalStorage();
+        calculateStats();
+        renderDashboard();
+        renderMatches();
+        saveToFirebase();
+        switchTab('matches');
+    }
+}
+
+function recalcWinner(match) {
+    let t1Wins = match.setResults.filter(r => r === 1).length;
+    let t2Wins = match.setResults.filter(r => r === 2).length;
+    const mMaxSets = match.maxSets || match.setResults.length;
+    let winsNeeded = Math.ceil(mMaxSets / 2);
+
+    if (t1Wins >= winsNeeded) match.winner = 1;
+    else if (t2Wins >= winsNeeded) match.winner = 2;
+    else match.winner = 0;
 }
 
 function findBestTeams(selectedPlayers) {
@@ -273,8 +329,9 @@ window.loadMoreMatches = function() {
             referee: referee,
             team1: teams[0],
             team2: teams[1],
-            setResults: [0, 0, 0],
-            winner: 0
+            setResults: Array(maxSets).fill(0),
+            winner: 0,
+            maxSets: maxSets
         });
     }
 
@@ -319,8 +376,9 @@ function generateMatches(totalGames, shouldBroadcast) {
             referee: referee,
             team1: teams[0],
             team2: teams[1],
-            setResults: [0, 0, 0],
-            winner: 0
+            setResults: Array(maxSets).fill(0),
+            winner: 0,
+            maxSets: maxSets
         });
     }
 
@@ -421,12 +479,15 @@ function renderDashboard() {
 
 window.handleSetClick = function(matchId, setIndex, teamWin) {
     const match = matches.find(m => m.id === matchId);
+    const mMaxSets = match.maxSets || match.setResults.length;
     
-    // 3세트 비활성화 방어 코드
-    if (setIndex === 2) {
-        if (match.setResults[0] === 1 && match.setResults[1] === 1) return;
-        if (match.setResults[0] === 2 && match.setResults[1] === 2) return;
+    let t1W = 0, t2W = 0;
+    for(let i=0; i<setIndex; i++) {
+        if(match.setResults[i] === 1) t1W++;
+        if(match.setResults[i] === 2) t2W++;
     }
+    const winsNeeded = Math.ceil(mMaxSets / 2);
+    if(t1W >= winsNeeded || t2W >= winsNeeded) return;
 
     if (match.setResults[setIndex] === teamWin) {
         match.setResults[setIndex] = 0;
@@ -434,19 +495,14 @@ window.handleSetClick = function(matchId, setIndex, teamWin) {
         match.setResults[setIndex] = teamWin;
     }
 
-    // 최종 승자 계산
-    if (match.setResults[0] === 1 && match.setResults[1] === 1) {
-        match.winner = 1;
-        match.setResults[2] = 0; 
-    } else if (match.setResults[0] === 2 && match.setResults[1] === 2) {
-        match.winner = 2;
-        match.setResults[2] = 0; 
-    } else {
-        let t1Wins = match.setResults.filter(r => r === 1).length;
-        let t2Wins = match.setResults.filter(r => r === 2).length;
-        if (t1Wins >= 2) match.winner = 1;
-        else if (t2Wins >= 2) match.winner = 2;
-        else match.winner = 0;
+    recalcWinner(match);
+
+    if (match.winner !== 0) {
+        for(let i = setIndex + 1; i < mMaxSets; i++) {
+            if(match.setResults[i] !== undefined) {
+                match.setResults[i] = 0;
+            }
+        }
     }
 
     // 로컬 적용 및 렌더링
@@ -474,9 +530,6 @@ function renderMatches() {
         const card = document.createElement('div');
         card.className = cardClass;
 
-        const is3rdSetDisabled = (match.setResults[0] === 1 && match.setResults[1] === 1) || 
-                                 (match.setResults[0] === 2 && match.setResults[1] === 2);
-
         card.innerHTML = `
             <div class="match-header">
                 <span class="match-number">Game ${match.id}</span>
@@ -501,11 +554,18 @@ function renderMatches() {
                 <div class="sets-container">
                     <div class="result-label-box">
                         <span class="set-title" style="visibility:hidden">결과</span>
-                        <div class="result-label ${match.winner === 1 ? 'win' : (match.winner === 2 ? 'loss' : '')}">${match.winner === 1 ? '승' : (match.winner === 2 ? '패' : '승/패')}</div>
-                        <div class="result-label ${match.winner === 2 ? 'win' : (match.winner === 1 ? 'loss' : '')}">${match.winner === 2 ? '승' : (match.winner === 1 ? '패' : '승/패')}</div>
+                        <div class="result-label ${match.winner === 1 ? 'win' : (match.winner === 2 ? 'loss' : '')}">${match.winner === 1 ? '승' : (match.winner === 2 ? '패' : '')}</div>
+                        <div class="result-label ${match.winner === 2 ? 'win' : (match.winner === 1 ? 'loss' : '')}">${match.winner === 2 ? '승' : (match.winner === 1 ? '패' : '')}</div>
                     </div>
-                    ${[0, 1, 2].map(setIdx => {
-                        const isDisabled = (setIdx === 2 && is3rdSetDisabled);
+                    ${Array.from({length: match.maxSets || match.setResults.length}).map((_, setIdx) => {
+                        let t1W = 0, t2W = 0;
+                        for(let i=0; i<setIdx; i++) {
+                            if(match.setResults[i] === 1) t1W++;
+                            if(match.setResults[i] === 2) t2W++;
+                        }
+                        const mMaxSets = match.maxSets || match.setResults.length;
+                        const winsNeeded = Math.ceil(mMaxSets / 2);
+                        const isDisabled = (t1W >= winsNeeded || t2W >= winsNeeded);
                         const t1Win = match.setResults[setIdx] === 1;
                         const t2Win = match.setResults[setIdx] === 2;
                         return `
