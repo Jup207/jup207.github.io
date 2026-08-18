@@ -11,6 +11,7 @@ let matches = [];
 let playerStats = {};
 let gameCount = 10;
 let maxSets = 3;
+let fixedRefereeId = null;
 let isInitialLoad = true;
 
 const firebaseConfig = {
@@ -39,7 +40,7 @@ function init() {
     initFirebase();
     renderPlayersInput();
     if(matches.length === 0) {
-        generateMatches(gameCount, false); 
+        generateMatches(gameCount, false, 'none'); 
     } else {
         calculateStats();
         renderDashboard();
@@ -69,6 +70,7 @@ function initFirebase() {
             }
             if (data.gameCount) gameCount = data.gameCount;
             if (data.maxSets) maxSets = data.maxSets;
+            if (data.fixedRefereeId !== undefined) fixedRefereeId = data.fixedRefereeId;
             
             saveToLocalStorage();
             calculateStats();
@@ -97,6 +99,7 @@ function saveToFirebase() {
             matches: matches,
             gameCount: gameCount,
             maxSets: maxSets,
+            fixedRefereeId: fixedRefereeId,
             timestamp: Date.now()
         });
     }
@@ -107,6 +110,7 @@ function saveToLocalStorage() {
     localStorage.setItem('pingpong_matches', JSON.stringify(matches));
     localStorage.setItem('pingpong_gameCount', gameCount);
     localStorage.setItem('pingpong_maxSets', maxSets);
+    localStorage.setItem('pingpong_fixedReferee', fixedRefereeId === null ? 'null' : fixedRefereeId);
 }
 
 function loadFromLocalStorage() {
@@ -126,13 +130,16 @@ function loadFromLocalStorage() {
     }
     if (savedCount) gameCount = parseInt(savedCount);
     if (savedMaxSets) maxSets = parseInt(savedMaxSets);
+    const savedFixedRef = localStorage.getItem('pingpong_fixedReferee');
+    if (savedFixedRef) fixedRefereeId = savedFixedRef === 'null' ? null : parseInt(savedFixedRef);
 }
 
 window.resetAllData = function() {
     if(confirm('모든 데이터가 초기화됩니다. 계속하시겠습니까?')) {
         PLAYERS = [...DEFAULT_PLAYERS];
         gameCount = 10;
-        generateMatches(gameCount, true);
+        fixedRefereeId = null;
+        generateMatches(gameCount, true, 'none');
         switchTab('matches');
     }
 }
@@ -164,14 +171,29 @@ window.switchTab = function(tabName) {
 
 function renderPlayersInput() {
     const container = document.getElementById('players-input-list');
-    container.innerHTML = '';
+    
+    let hasFixedRef = PLAYERS.some(p => p.id === fixedRefereeId);
+    if (!hasFixedRef) fixedRefereeId = null;
+    
+    container.innerHTML = `
+        <div style="margin-bottom: 0.8rem; background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 6px;">
+            <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="fixed_ref" value="none" ${fixedRefereeId === null ? 'checked' : ''}>
+                심판 고정 없음 (자동 교대)
+            </label>
+        </div>
+    `;
     
     PLAYERS.forEach((p, idx) => {
         const row = document.createElement('div');
         row.className = 'player-input-row';
         row.innerHTML = `
+            <input type="hidden" class="p-id" value="${p.id}">
             <input type="text" value="${p.name}" class="p-name" placeholder="이름" required>
             <input type="number" value="${p.bu}" class="p-bu" placeholder="부수" min="1" max="20" required>
+            <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; margin-right: 0.5rem; white-space: nowrap; cursor: pointer;">
+                <input type="radio" name="fixed_ref" value="${p.id}" ${p.id === fixedRefereeId ? 'checked' : ''}> 심판 고정
+            </label>
             <button class="remove-btn" onclick="removePlayer(${idx})">삭제</button>
         `;
         container.appendChild(row);
@@ -200,26 +222,36 @@ window.applySettingsAndGenerate = function() {
     let newPlayers = [];
     let isValid = true;
 
-    rows.forEach((row, idx) => {
+    rows.forEach((row) => {
+        const id = parseInt(row.querySelector('.p-id').value);
         const name = row.querySelector('.p-name').value.trim();
         const bu = parseInt(row.querySelector('.p-bu').value);
         if (!name || isNaN(bu)) isValid = false;
-        newPlayers.push({ id: idx + 1, name, bu });
+        newPlayers.push({ id, name, bu });
     });
 
     if (!isValid) return alert('모든 선수의 이름과 부수를 입력해주세요.');
     if (newPlayers.length < 4) return alert('선수는 최소 4명이어야 합니다.');
+
+    const refVal = document.querySelector('input[name="fixed_ref"]:checked').value;
+    const newFixedRefereeId = refVal === 'none' ? null : parseInt(refVal);
+    
+    let activeCount = newPlayers.length;
+    if (newFixedRefereeId !== null) activeCount--;
+    
+    if (activeCount < 4) return alert('심판 고정 시 경기를 뛸 선수가 최소 4명 필요합니다. 선수를 추가하거나 심판 고정을 해제하세요.');
 
     const countInput = parseInt(document.getElementById('game-count').value);
     if (isNaN(countInput) || countInput < 1) return alert('게임 수는 1 이상이어야 합니다.');
 
     const maxSetsInput = parseInt(document.getElementById('max-sets').value);
 
+    fixedRefereeId = newFixedRefereeId;
     PLAYERS = newPlayers;
     gameCount = countInput;
     if(maxSetsInput === 3 || maxSetsInput === 5) maxSets = maxSetsInput;
     
-    generateMatches(gameCount, true);
+    generateMatches(gameCount, true, 'started');
     switchTab('matches');
 }
 
@@ -300,31 +332,91 @@ function getPlayAndRefCounts() {
 window.loadMoreMatches = function() {
     const addCount = 10;
     gameCount += addCount;
-    
-    const { refCounts, playCounts } = getPlayAndRefCounts();
-    let nextMatchId = matches.length > 0 ? matches[matches.length - 1].id + 1 : 1;
+    generateMatches(gameCount, true, 'all');
+}
 
-    for (let i = 0; i < addCount; i++) {
+function generateMatches(totalGames, shouldBroadcast, keepStrategy = 'none') {
+    let newMatches = [];
+    
+    let refCounts = {};
+    let playCounts = {};
+    PLAYERS.forEach(p => {
+        refCounts[p.id] = 0;
+        playCounts[p.id] = 0;
+    });
+
+    if (keepStrategy === 'started') {
+        newMatches = matches.filter(m => m.setResults.some(r => r !== 0));
+    } else if (keepStrategy === 'all') {
+        newMatches = [...matches];
+    }
+
+    let startIndex = newMatches.length;
+
+    newMatches.forEach(m => {
+        if(m.referee && refCounts[m.referee.id] !== undefined) refCounts[m.referee.id]++;
+        m.team1.forEach(p => { if(playCounts[p.id] !== undefined) playCounts[p.id]++ });
+        m.team2.forEach(p => { if(playCounts[p.id] !== undefined) playCounts[p.id]++ });
+    });
+
+    let matchesToGenerate = totalGames - newMatches.length;
+    let nextMatchId = newMatches.length > 0 ? newMatches[newMatches.length - 1].id + 1 : 1;
+
+    for (let i = 0; i < matchesToGenerate; i++) {
         let referee = null;
         let playing4 = [];
 
-        if (PLAYERS.length === 4) {
-            playing4 = [...PLAYERS];
-        } else {
-            let sortedRefs = [...PLAYERS].sort((a, b) => refCounts[a.id] - refCounts[b.id]);
+        let activePlayers = PLAYERS;
+        
+        if (fixedRefereeId) {
+            referee = PLAYERS.find(p => p.id === fixedRefereeId) || null;
+            if (referee) {
+                activePlayers = PLAYERS.filter(p => p.id !== fixedRefereeId);
+            }
+        }
+
+        if (activePlayers.length === 4) {
+            playing4 = [...activePlayers];
+            if (referee) {
+                refCounts[referee.id]++;
+            }
+        } else if (activePlayers.length > 4) {
+            let sortedRefs = [...activePlayers].sort((a, b) => refCounts[a.id] - refCounts[b.id]);
             referee = sortedRefs[0];
             refCounts[referee.id]++;
 
-            let remaining = PLAYERS.filter(p => p.id !== referee.id);
+            let remaining = activePlayers.filter(p => p.id !== referee.id);
             remaining.sort((a, b) => playCounts[a.id] - playCounts[b.id]);
             playing4 = remaining.slice(0, 4);
+        } else {
+            playing4 = [...activePlayers];
         }
 
-        playing4.forEach(p => playCounts[p.id]++);
-        const teams = findBestTeams(playing4);
-        if (Math.random() > 0.5) teams.reverse();
+        playing4.forEach(p => { if(playCounts[p.id] !== undefined) playCounts[p.id]++ });
+        
+        let teams;
+        if (playing4.length === 4) {
+            teams = findBestTeams(playing4);
+        } else {
+            let half = Math.floor(playing4.length / 2);
+            teams = [playing4.slice(0, half), playing4.slice(half)];
+        }
 
-        matches.push({
+        if (teams.length >= 2 && teams[0].length >= 2 && teams[1].length >= 2) {
+            let t1Sum = teams[0][0].bu + teams[0][1].bu;
+            let t2Sum = teams[1][0].bu + teams[1][1].bu;
+            if (t1Sum > t2Sum) {
+                teams.reverse();
+            } else if (t1Sum === t2Sum) {
+                let min1 = Math.min(teams[0][0].bu, teams[0][1].bu);
+                let min2 = Math.min(teams[1][0].bu, teams[1][1].bu);
+                if (min1 > min2) {
+                    teams.reverse();
+                }
+            }
+        }
+
+        newMatches.push({
             id: nextMatchId++,
             referee: referee,
             team1: teams[0],
@@ -335,53 +427,8 @@ window.loadMoreMatches = function() {
         });
     }
 
-    saveToLocalStorage();
-    calculateStats();
-    renderDashboard();
-    renderMatches();
-    saveToFirebase();
-}
-
-function generateMatches(totalGames, shouldBroadcast) {
-    matches = [];
-    let refCounts = {};
-    let playCounts = {};
-    PLAYERS.forEach(p => {
-        refCounts[p.id] = 0;
-        playCounts[p.id] = 0;
-    });
-
-    for (let i = 0; i < totalGames; i++) {
-        let referee = null;
-        let playing4 = [];
-
-        if (PLAYERS.length === 4) {
-            playing4 = [...PLAYERS];
-        } else {
-            let sortedRefs = [...PLAYERS].sort((a, b) => refCounts[a.id] - refCounts[b.id]);
-            referee = sortedRefs[0];
-            refCounts[referee.id]++;
-
-            let remaining = PLAYERS.filter(p => p.id !== referee.id);
-            remaining.sort((a, b) => playCounts[a.id] - playCounts[b.id]);
-            playing4 = remaining.slice(0, 4);
-        }
-
-        playing4.forEach(p => playCounts[p.id]++);
-        const teams = findBestTeams(playing4);
-        if (Math.random() > 0.5) teams.reverse();
-
-        matches.push({
-            id: i + 1,
-            referee: referee,
-            team1: teams[0],
-            team2: teams[1],
-            setResults: Array(maxSets).fill(0),
-            winner: 0,
-            maxSets: maxSets
-        });
-    }
-
+    matches = newMatches;
+    
     saveToLocalStorage();
     calculateStats();
     renderDashboard();
