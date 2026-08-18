@@ -663,3 +663,14 @@ h1 {
     background: rgba(255,255,255,0.1);
     color: var(--text-primary);
 }
+
+.player-name-clickable {
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+.player-name-clickable:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--accent-blue);
+}

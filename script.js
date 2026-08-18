@@ -586,14 +586,20 @@ function renderMatches() {
             <div class="match-body">
                 <div class="teams-container">
                     <div class="team ${match.winner === 1 ? 'winner' : (match.winner === 2 ? 'loser' : '')}">
-                        <div class="team-name">${match.team1[0].name}, ${match.team1[1].name}</div>
+                        <div class="team-name">
+                            <span class="player-name-clickable" onclick="openPlayerSwapModal(${match.id}, 1, 0)" title="멤버 변경">${match.team1[0].name}</span>, 
+                            <span class="player-name-clickable" onclick="openPlayerSwapModal(${match.id}, 1, 1)" title="멤버 변경">${match.team1[1].name}</span>
+                        </div>
                         <div class="team-bu-sum">합: ${t1Sum}</div>
                     </div>
                     
                     <div class="vs">VS</div>
                     
                     <div class="team ${match.winner === 2 ? 'winner' : (match.winner === 1 ? 'loser' : '')}">
-                        <div class="team-name">${match.team2[0].name}, ${match.team2[1].name}</div>
+                        <div class="team-name">
+                            <span class="player-name-clickable" onclick="openPlayerSwapModal(${match.id}, 2, 0)" title="멤버 변경">${match.team2[0].name}</span>, 
+                            <span class="player-name-clickable" onclick="openPlayerSwapModal(${match.id}, 2, 1)" title="멤버 변경">${match.team2[1].name}</span>
+                        </div>
                         <div class="team-bu-sum">합: ${t2Sum}</div>
                     </div>
                 </div>
@@ -700,6 +706,104 @@ window.performSwap = function(playerId) {
         saveToFirebase();
     }
     closeSwapModal();
+}
+
+let currentPlayerSwapMatchId = null;
+let currentPlayerSwapTeam = null;
+let currentPlayerSwapIndex = null;
+
+window.openPlayerSwapModal = function(matchId, teamNum, playerIdx) {
+    const match = matches.find(m => m.id === matchId);
+    if (!match) return;
+    
+    currentPlayerSwapMatchId = matchId;
+    currentPlayerSwapTeam = teamNum;
+    currentPlayerSwapIndex = playerIdx;
+
+    const listContainer = document.getElementById('player-swap-list');
+    listContainer.innerHTML = '';
+    
+    const team = teamNum === 1 ? match.team1 : match.team2;
+    const oldPlayer = team[playerIdx];
+
+    PLAYERS.forEach(p => {
+        if (p.id === oldPlayer.id) return; // Skip the player being replaced
+        
+        const btn = document.createElement('button');
+        btn.className = 'modal-player-btn';
+        btn.innerText = `${p.name} (${p.bu}부)`;
+        btn.onclick = () => performPlayerSwap(p.id);
+        listContainer.appendChild(btn);
+    });
+    
+    document.getElementById('player-swap-modal').classList.add('active');
+}
+
+window.closePlayerSwapModal = function() {
+    document.getElementById('player-swap-modal').classList.remove('active');
+    currentPlayerSwapMatchId = null;
+    currentPlayerSwapTeam = null;
+    currentPlayerSwapIndex = null;
+}
+
+window.performPlayerSwap = function(newPlayerId) {
+    if (!currentPlayerSwapMatchId) return;
+    const match = matches.find(m => m.id === currentPlayerSwapMatchId);
+    if (!match) return;
+    
+    const newPlayer = PLAYERS.find(p => p.id === newPlayerId);
+    if (!newPlayer) return;
+
+    const team = currentPlayerSwapTeam === 1 ? match.team1 : match.team2;
+    const oldPlayer = team[currentPlayerSwapIndex];
+
+    if (oldPlayer.id === newPlayerId) {
+        closePlayerSwapModal();
+        return;
+    }
+
+    if (match.referee && match.referee.id === newPlayerId) {
+        team[currentPlayerSwapIndex] = newPlayer;
+        match.referee = oldPlayer;
+    } else {
+        let newPlayerTeamNum = null;
+        let newPlayerIdx = -1;
+        
+        if (match.team1.findIndex(p => p.id === newPlayerId) !== -1) {
+            newPlayerTeamNum = 1;
+            newPlayerIdx = match.team1.findIndex(p => p.id === newPlayerId);
+        } else if (match.team2.findIndex(p => p.id === newPlayerId) !== -1) {
+            newPlayerTeamNum = 2;
+            newPlayerIdx = match.team2.findIndex(p => p.id === newPlayerId);
+        }
+
+        if (newPlayerTeamNum !== null) {
+            const otherTeam = newPlayerTeamNum === 1 ? match.team1 : match.team2;
+            otherTeam[newPlayerIdx] = oldPlayer;
+            team[currentPlayerSwapIndex] = newPlayer;
+        } else {
+            team[currentPlayerSwapIndex] = newPlayer;
+        }
+    }
+
+    if (PLAYERS.length === 4) {
+        const matchIndex = matches.findIndex(m => m.id === match.id);
+        if (matchIndex !== -1) {
+            for (let i = matchIndex + 1; i < matches.length; i++) {
+                matches[i].team1 = [...match.team1];
+                matches[i].team2 = [...match.team2];
+                if (match.referee) matches[i].referee = match.referee;
+            }
+        }
+    }
+
+    saveToLocalStorage();
+    calculateStats();
+    renderDashboard();
+    renderMatches();
+    saveToFirebase();
+    
+    closePlayerSwapModal();
 }
 
 document.addEventListener('DOMContentLoaded', init);
