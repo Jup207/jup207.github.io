@@ -906,18 +906,19 @@ function renderHistory() {
                 <div class="history-date">${dateStr}</div>
                 <button class="history-delete-btn" onclick="deleteHistory('${key}')">삭제</button>
             </div>
-            <table class="history-table">
-                <thead>
-                    <tr>
-                        <th>순위</th>
-                        <th>이름</th>
-                        <th>부수</th>
-                        <th>승</th>
-                        <th>전적</th>
-                        <th>승률</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div style="overflow-x: auto;">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>순위</th>
+                            <th>이름</th>
+                            <th>부수</th>
+                            <th>승</th>
+                            <th>전적</th>
+                            <th>승률</th>
+                        </tr>
+                    </thead>
+                    <tbody>
         `;
 
         results.forEach(r => {
@@ -939,8 +940,9 @@ function renderHistory() {
         });
 
         tableHtml += `
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
         `;
 
         card.innerHTML = tableHtml;
