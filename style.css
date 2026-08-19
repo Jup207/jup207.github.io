@@ -104,6 +104,23 @@ h1 {
     background: rgba(239, 68, 68, 0.1);
 }
 
+.save-result-btn {
+    background: transparent;
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.save-result-btn:hover {
+    background: rgba(16, 185, 129, 0.1);
+    box-shadow: 0 0 10px var(--glow-green);
+}
+
 /* Compact Player Stats */
 .player-stats-container {
     display: flex;
@@ -206,13 +223,80 @@ h1 {
 }
 
 /* Tabs Content Visibility */
-.matches-container, .settings-container {
+.matches-container, .settings-container, .history-container {
     display: none;
 }
 
 .matches-container.active-tab, .settings-container.active-tab {
     display: grid;
     animation: fadeIn 0.4s ease forwards;
+}
+
+.history-container.active-tab {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    animation: fadeIn 0.4s ease forwards;
+}
+
+.history-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    backdrop-filter: blur(10px);
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 0.5rem;
+}
+
+.history-date {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: var(--accent-blue);
+}
+
+.history-delete-btn {
+    background: transparent;
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.history-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table th, .history-table td {
+    padding: 0.6rem;
+    text-align: center;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.history-table th {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.history-table td {
+    font-size: 0.9rem;
 }
 
 @keyframes fadeIn {

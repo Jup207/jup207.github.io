@@ -26,6 +26,8 @@ const firebaseConfig = {
 };
 
 let dbRef = null;
+let historyRef = null;
+let historyData = {};
 
 function updateStatus(text, color) {
     const el = document.getElementById('connection-status');
@@ -57,6 +59,15 @@ function initFirebase() {
     }
     const db = firebase.database();
     dbRef = db.ref('pingpong_rooms/main_room');
+    historyRef = db.ref('pingpong_rooms/history');
+
+    historyRef.on('value', (snapshot) => {
+        historyData = snapshot.val() || {};
+        const tabHistory = document.getElementById('tab-history');
+        if (tabHistory && tabHistory.classList.contains('active')) {
+            renderHistory();
+        }
+    });
 
     dbRef.on('value', (snapshot) => {
         const data = snapshot.val();
@@ -148,22 +159,26 @@ window.switchTab = function(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`tab-${tabName}`).classList.add('active');
 
-    document.querySelectorAll('.matches-container, .settings-container').forEach(el => {
-        el.classList.remove('active-tab');
+    document.querySelectorAll('.matches-container, .settings-container, .history-container').forEach(el => {
+        if (el) el.classList.remove('active-tab');
     });
     
     document.getElementById(`${tabName}-container`).classList.add('active-tab');
     
-    // 설정 화면일 때는 대시보드 스탯 숨기기 (화면 클리어)
+    // 설정/히스토리 화면일 때는 대시보드 스탯 숨기기 (화면 클리어)
     const statsContainer = document.getElementById('player-stats');
     if (statsContainer) {
-        statsContainer.style.display = tabName === 'settings' ? 'none' : 'flex';
+        statsContainer.style.display = (tabName === 'settings' || tabName === 'history') ? 'none' : 'flex';
     }
 
     // 로드 모어 버튼 표시 처리
     const loadMoreBtn = document.getElementById('load-more-container');
     if (loadMoreBtn) {
         loadMoreBtn.style.display = tabName === 'matches' ? 'block' : 'none';
+    }
+
+    if (tabName === 'history') {
+        renderHistory();
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -804,6 +819,155 @@ window.performPlayerSwap = function(newPlayerId) {
     saveToFirebase();
     
     closePlayerSwapModal();
+}
+
+window.saveTodayResult = function() {
+    if (!historyRef) return alert('서버에 연결되지 않았습니다.');
+    
+    const completedMatches = matches.filter(m => m.winner !== 0).length;
+    if (completedMatches === 0) {
+        if (!confirm('완료된 게임이 없습니다. 그래도 현재 상태를 저장하시겠습니까?')) return;
+    }
+
+    const sortedStats = Object.values(playerStats).sort((a, b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        return a.bu - b.bu; 
+    });
+
+    let currentRank = 1;
+    let previousWins = -1;
+    let rankOffset = 0; 
+    
+    const resultsToSave = sortedStats.map((stat) => {
+        if (stat.wins !== previousWins) {
+            currentRank = currentRank + rankOffset;
+            rankOffset = 1;
+        } else {
+            rankOffset++;
+        }
+        previousWins = stat.wins;
+        
+        const rate = stat.matchesPlayed === 0 ? 0 : Math.round((stat.wins / stat.matchesPlayed) * 100);
+        return {
+            rank: currentRank,
+            name: stat.name,
+            bu: stat.bu,
+            wins: stat.wins,
+            matchesPlayed: stat.matchesPlayed,
+            rate: rate
+        };
+    });
+
+    const today = new Date();
+    const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0') + ' ' + 
+                    String(today.getHours()).padStart(2, '0') + ':' + 
+                    String(today.getMinutes()).padStart(2, '0');
+
+    historyRef.push().set({
+        date: dateStr,
+        results: resultsToSave,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        alert(`${dateStr} 결과가 성공적으로 저장되었습니다!`);
+    }).catch(err => {
+        alert('저장에 실패했습니다: ' + err.message);
+    });
+}
+
+function renderHistory() {
+    const container = document.getElementById('history-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+
+    if (!historyData || Object.keys(historyData).length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding: 2rem; color:var(--text-secondary);">저장된 기록이 없습니다.</div>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
+            <button class="reset-btn" onclick="deleteAllHistory()">전체 기록 삭제</button>
+        </div>
+    `;
+
+    const sortedKeys = Object.keys(historyData).sort((a, b) => b.localeCompare(a));
+
+    sortedKeys.forEach(key => {
+        const data = historyData[key];
+        const dateStr = data.date || key;
+        const results = data.results || [];
+
+        const card = document.createElement('div');
+        card.className = 'history-card';
+
+        let tableHtml = `
+            <div class="history-header">
+                <div class="history-date">${dateStr}</div>
+                <button class="history-delete-btn" onclick="deleteHistory('${key}')">삭제</button>
+            </div>
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>순위</th>
+                        <th>이름</th>
+                        <th>부수</th>
+                        <th>승</th>
+                        <th>전적</th>
+                        <th>승률</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        results.forEach(r => {
+            let rankDisplay = `${r.rank}위`;
+            if (r.rank === 1) rankDisplay = '🥇 1위';
+            else if (r.rank === 2) rankDisplay = '🥈 2위';
+            else if (r.rank === 3) rankDisplay = '🥉 3위';
+
+            tableHtml += `
+                <tr>
+                    <td>${rankDisplay}</td>
+                    <td style="font-weight:bold; color:white;">${r.name}</td>
+                    <td style="color:var(--accent-blue); font-size:0.8rem;">${r.bu}부</td>
+                    <td style="color:var(--accent-green); font-weight:bold;">${r.wins}승</td>
+                    <td style="color:var(--text-secondary);">${r.matchesPlayed}전</td>
+                    <td>${r.rate}%</td>
+                </tr>
+            `;
+        });
+
+        tableHtml += `
+                </tbody>
+            </table>
+        `;
+
+        card.innerHTML = tableHtml;
+        container.appendChild(card);
+    });
+}
+
+window.deleteHistory = function(key) {
+    if (!confirm('이 기록을 정말 삭제하시겠습니까?')) return;
+    if (historyRef) {
+        historyRef.child(key).remove().then(() => {
+            // 삭제 시 리스너에 의해 renderHistory() 자동 호출됨
+        }).catch(err => {
+            alert('삭제 실패: ' + err.message);
+        });
+    }
+}
+
+window.deleteAllHistory = function() {
+    if (!confirm('모든 과거 기록을 정말 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다.)')) return;
+    if (historyRef) {
+        historyRef.remove().then(() => {
+            // 삭제 시 리스너에 의해 renderHistory() 자동 호출됨
+        }).catch(err => {
+            alert('삭제 실패: ' + err.message);
+        });
+    }
 }
 
 document.addEventListener('DOMContentLoaded', init);

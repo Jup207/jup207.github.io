@@ -24,9 +24,13 @@
                 <div class="header-right">
                     <div class="tabs">
                         <button class="tab-btn active" id="tab-matches" onclick="switchTab('matches')">매치</button>
+                        <button class="tab-btn" id="tab-history" onclick="switchTab('history')">히스토리</button>
                         <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">설정</button>
                     </div>
-                    <button class="reset-btn" onclick="resetAllData()">데이터 초기화</button>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <button class="save-result-btn" onclick="saveTodayResult()">오늘 결과 저장</button>
+                        <button class="reset-btn" onclick="resetAllData()">데이터 초기화</button>
+                    </div>
                 </div>
             </div>
             
@@ -43,6 +47,11 @@
             
             <div id="load-more-container" style="text-align:center; margin-top: 1rem; display: none;">
                 <button class="generate-btn" style="width:auto; padding: 0.8rem 2rem; font-size: 1rem;" onclick="loadMoreMatches()">+ 10게임 더 만들기 (More)</button>
+            </div>
+
+            <!-- 히스토리 화면 -->
+            <div class="history-container" id="history-container">
+                <!-- 날짜별 과거 기록 렌더링 -->
             </div>
 
             <!-- 설정 화면 -->
