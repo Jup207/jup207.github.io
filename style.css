@@ -536,7 +536,26 @@ h1 {
     padding: 0.5rem 0.8rem;
     border-radius: 6px;
     font-size: 0.9rem;
+    min-width: 0;
+}
+
+.player-input-row input.p-name {
     flex: 1;
+}
+
+.player-input-row input.p-bu {
+    flex: 0 0 60px;
+    text-align: center;
+}
+
+.fixed-ref-label {
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-right: 0.5rem;
+    white-space: nowrap;
+    cursor: pointer;
 }
 
 .player-input-row input:focus {
@@ -729,6 +748,38 @@ h1 {
     }
     .player-bu {
         display: none;
+    }
+    .player-input-row {
+        gap: 0.3rem;
+        padding: 0.5rem;
+    }
+    .player-input-row input {
+        padding: 0.4rem 0.3rem;
+        font-size: 0.8rem;
+    }
+    .player-input-row input.p-bu {
+        flex: 0 0 45px;
+    }
+    .fixed-ref-label {
+        font-size: 0.7rem;
+        gap: 0.2rem;
+        margin-right: 0.2rem;
+    }
+    .remove-btn {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    .history-card {
+        padding: 1rem 0.5rem;
+    }
+    .history-table th, .history-table td {
+        padding: 0.4rem 0.2rem;
+    }
+    .history-table th {
+        font-size: 0.7rem;
+    }
+    .history-table td {
+        font-size: 0.75rem;
     }
 }
 

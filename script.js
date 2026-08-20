@@ -206,7 +206,7 @@ function renderPlayersInput() {
             <input type="hidden" class="p-id" value="${p.id}">
             <input type="text" value="${p.name}" class="p-name" placeholder="이름" required>
             <input type="number" value="${p.bu}" class="p-bu" placeholder="부수" min="1" max="20" required>
-            <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; margin-right: 0.5rem; white-space: nowrap; cursor: pointer;">
+            <label class="fixed-ref-label">
                 <input type="radio" name="fixed_ref" value="${p.id}" ${p.id === fixedRefereeId ? 'checked' : ''}> 심판 고정
             </label>
             <button class="remove-btn" onclick="removePlayer(${idx})">삭제</button>
