@@ -146,7 +146,7 @@ function loadFromLocalStorage() {
 }
 
 window.resetAllData = function() {
-    if(confirm('모든 데이터가 초기화됩니다. 계속하시겠습니까?')) {
+    if(confirm('현재 매치결과가 삭제됩니다. 계속하시겠습니까?')) {
         PLAYERS = [...DEFAULT_PLAYERS];
         gameCount = 10;
         fixedRefereeId = null;
@@ -595,7 +595,7 @@ function renderMatches() {
         card.innerHTML = `
             <div class="match-header">
                 <span class="match-number">Game ${match.id}</span>
-                ${match.referee ? `<span class="match-referee" onclick="openSwapModal(${match.id})" title="심판 교체하기">👑 심판: ${match.referee.name} 🔄</span>` : `<span class="match-referee">심판 없음</span>`}
+                ${match.referee ? `<span class="match-referee" onclick="openSwapModal(${match.id})" title="심판 교체하기">👑 심판: ${match.referee.name} 🔄</span>` : `<span class="match-referee">심판은 없음</span>`}
             </div>
             
             <div class="match-body">
